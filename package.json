@@ -1,0 +1,16 @@
+{
+  "name": "timeio",
+  "version": "1.0.0",
+  "description": "Application activity tracker",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "Tomas Costantino",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "electron": "^35.1.5",
+    "express": "^4.18.1",
+    "node-fetch": "^2.6.7"
+  }
+}
