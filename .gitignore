@@ -2,5 +2,7 @@
 /.idea
 /dist
 /node_modules
-/python/venv
+/timeio_api/venv
 package-lock.json
+/timeio_api/api/migrations/
+timeio_api/.env
