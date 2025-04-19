@@ -1,8 +1,10 @@
 .DS_Store
 /.idea
 /dist
-/node_modules
+timeio_electron/node_modules
 /timeio_api/venv
-package-lock.json
+timeio_electron/package-lock.json
 /timeio_api/api/migrations/
 timeio_api/.env
+/timeio_api/db.sqlite3
+timeio_app/package-lock.json
