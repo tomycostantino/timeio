@@ -1,14 +1,17 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain} = require('electron');
+const { spawn } = require('child_process');
 const path = require('node:path');
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
+let mainWindow;
+let trackerProcess = null;
+
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
 const createWindow = () => {
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 800,
     height: 600,
     webPreferences: {
@@ -19,18 +22,13 @@ const createWindow = () => {
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  // mainWindow.webContents.openDevTools();
 };
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   createWindow();
+  startTracker();
 
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -38,14 +36,96 @@ app.whenReady().then(() => {
   });
 });
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.
+app.on('before-quit', () => {
+    if (trackerProcess) {
+        // Send the exit command and kill process
+        trackerProcess.stdin.write('exit\n');
+         setTimeout(() => {
+             if (trackerProcess && !trackerProcess.killed) {
+                 trackerProcess.kill();
+             }
+         }, 2000);
+    }
+});
+
+function startTracker() {
+    if (trackerProcess) {
+        console.log("Python process is already running.");
+        return;
+    }
+
+    const pythonScriptPath = path.join(__dirname, '..', '..', 'time_tracker.py');
+
+    trackerProcess = spawn('python', [pythonScriptPath]);
+
+    console.log(`Started Python process with PID: ${trackerProcess.pid}`);
+
+    trackerProcess.stdout.on('data', (data) => {
+        const output = data.toString().trim();
+        try {
+            const jsonOutput = JSON.parse(output);
+            console.log(`Python stdout: ${output}`);
+            if (mainWindow) {
+                if (jsonOutput.status) {
+                    mainWindow.webContents.send('tracker-status', jsonOutput);
+                } else if (jsonOutput.usage_data) {
+                    mainWindow.webContents.send('tracker-usage-status', jsonOutput);
+                }
+            }
+        } catch (e) {
+            console.error(`Failed to parse Python stdout as JSON: ${output}`, e);
+             if (mainWindow) {
+                 mainWindow.webContents.send('tracker-status', { status: "error", message: output });
+             }
+        }
+    });
+
+    /*
+    trackerProcess.stderr.on('data', (data) => {
+        const error = data.toString().trim();
+        console.error(`Python stderr: ${error}`);
+        if (mainWindow) {
+            mainWindow.webContents.send('python-error', { error: error });
+        }
+    });
+
+    trackerProcess.on('close', (code) => {
+        console.log(`Python process exited with code ${code}`);
+         if (mainWindow) {
+             mainWindow.webContents.send('python-status', { status: 'exited', code: code });
+         }
+        trackerProcess = null;
+    });
+
+     trackerProcess.on('error', (err) => {
+         console.error('Failed to start or communicate with Python process:', err);
+          if (mainWindow) {
+             mainWindow.webContents.send('python-status', { status: 'error', message: err.message });
+          }
+         trackerProcess = null;
+     });
+    */
+}
+
+function sendTrackerCommand(command) {
+    if (trackerProcess) {
+        // console.log(`Sending command to Python: ${command}`);
+        trackerProcess.stdin.write(`${command}\n`);
+    } else {
+        console.warn(`Python process not running. Cannot send command: ${command}`);
+         if (mainWindow) {
+             mainWindow.webContents.send('python-status', { status: 'command-failed', command: command, reason: 'Process not running' });
+         }
+    }
+}
+
+ipcMain.on('tracker-command', (event, command) => {
+    sendTrackerCommand(command);
+});
+
