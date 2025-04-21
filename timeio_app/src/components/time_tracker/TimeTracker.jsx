@@ -11,6 +11,49 @@ export const TimeTracker = () => {
   const [error, setError] = useState(null);
   const startTimeRef = useRef(null);
   const timerIntervalRef = useRef(null);
+  const stateInitializedRef = useRef(false);
+
+  useEffect(() => {
+    const loadState = async () => {
+      try {
+        if (!stateInitializedRef.current) {
+          const savedState = await window.trackerStateManager.getState();
+
+          setIsRunning(savedState.isRunning);
+          setElapsedTime(savedState.elapsedTime);
+          setDescription(savedState.description);
+          setAppUsage(savedState.appUsage);
+          setProcessStatus(savedState.processStatus);
+          setError(savedState.error);
+
+          startTimeRef.current = savedState.startTime;
+          stateInitializedRef.current = true;
+
+          if (savedState.isRunning && savedState.startTime) {
+            startTimer(savedState.startTime, savedState.elapsedTime);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load state from main process:", err);
+      }
+    };
+
+    loadState();
+  }, []);
+
+  useEffect(() => {
+    if (stateInitializedRef.current) {
+      window.trackerStateManager.updateState({
+        isRunning,
+        elapsedTime,
+        description,
+        appUsage,
+        processStatus,
+        error,
+        startTime: startTimeRef.current
+      });
+    }
+  }, [isRunning, elapsedTime, description, appUsage, processStatus, error]);
 
   useEffect(() => {
     if (isRunning) {
@@ -22,7 +65,10 @@ export const TimeTracker = () => {
     }
 
     return () => {
-      stopTimer();
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
     };
   }, [isRunning]);
 
@@ -41,7 +87,7 @@ export const TimeTracker = () => {
       } else if (status.status === 'stopped') {
         setIsRunning(false);
       } else if (status.status === 'error') {
-        setError( status.message || "An unknown Python error occurred.");
+        setError(status.message || "An unknown Python error occurred.");
         setAppUsage(null);
       }
     }
@@ -67,12 +113,16 @@ export const TimeTracker = () => {
     }
   }
 
-  const startTimer = () => {
+  const startTimer = (existingStartTime = null, existingElapsed = null) => {
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
     }
 
-    startTimeRef.current = Date.now() - elapsedTime * 1000;
+    if (existingStartTime) {
+      startTimeRef.current = existingStartTime;
+    } else {
+      startTimeRef.current = Date.now() - (existingElapsed || elapsedTime) * 1000;
+    }
 
     timerIntervalRef.current = setInterval(() => {
       const now = Date.now();
@@ -100,6 +150,25 @@ export const TimeTracker = () => {
     ].join(":");
   };
 
+  const saveSessionToDatabase = async () => {
+    if (!startTimeRef.current || elapsedTime <= 0) return;
+
+    try {
+      const sessionData = {
+        start_time: Math.floor(startTimeRef.current / 1000),
+        end_time: Math.floor(Date.now() / 1000),
+        duration: elapsedTime,
+        app_usage: appUsage ? JSON.stringify(appUsage) : null
+      };
+
+      const result = await window.database.ipcRenderer.invoke('store-session', sessionData);
+      console.log('Session saved to database with ID:', result.id);
+    } catch (err) {
+      console.error('Failed to save session to database:', err);
+      setError('Failed to save session data to database.');
+    }
+  };
+
   const handleStartStop = async () => {
     if (!isRunning) {
       sendTrackerCommand('start');
@@ -114,12 +183,15 @@ export const TimeTracker = () => {
   const handleReset = () => {
     sendTrackerCommand('reset');
     stopTimer();
+    saveSessionToDatabase();
     setIsRunning(false);
     setElapsedTime(0);
     setDescription("");
     setAppUsage(null);
     setProcessStatus(null);
     setError(null);
+
+    startTimeRef.current = null;
   };
 
   const sortedAppUsage = appUsage

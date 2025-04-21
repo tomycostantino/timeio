@@ -1,9 +1,19 @@
 const { app, BrowserWindow, ipcMain} = require('electron');
 const { spawn } = require('child_process');
 const path = require('node:path');
+const { initDatabase, closeDatabase } = require('../database/database.js');
 
 let mainWindow;
 let trackerProcess = null;
+let trackerState = {
+  isRunning: false,
+  elapsedTime: 0,
+  description: "",
+  appUsage: null,
+  processStatus: null,
+  error: null,
+  startTime: null
+};
 
 if (require('electron-squirrel-startup')) {
   app.quit();
@@ -27,6 +37,7 @@ const createWindow = () => {
 
 app.whenReady().then(() => {
   createWindow();
+  initDatabase();
   startTracker();
 
   app.on('activate', () => {
@@ -44,6 +55,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
     if (trackerProcess) {
+        closeDatabase();
         // Send the exit command and kill process
         trackerProcess.stdin.write('exit\n');
          setTimeout(() => {
@@ -60,7 +72,7 @@ function startTracker() {
         return;
     }
 
-    const pythonScriptPath = path.join(__dirname, '..', '..', 'time_tracker.py');
+    const pythonScriptPath = path.join(__dirname, '..', '..', 'python', 'time_tracker.py');
 
     trackerProcess = spawn('python', [pythonScriptPath]);
 
@@ -70,7 +82,6 @@ function startTracker() {
         const output = data.toString().trim();
         try {
             const jsonOutput = JSON.parse(output);
-            console.log(`Python stdout: ${output}`);
             if (mainWindow) {
                 if (jsonOutput.status) {
                     mainWindow.webContents.send('tracker-status', jsonOutput);
@@ -85,37 +96,10 @@ function startTracker() {
              }
         }
     });
-
-    /*
-    trackerProcess.stderr.on('data', (data) => {
-        const error = data.toString().trim();
-        console.error(`Python stderr: ${error}`);
-        if (mainWindow) {
-            mainWindow.webContents.send('python-error', { error: error });
-        }
-    });
-
-    trackerProcess.on('close', (code) => {
-        console.log(`Python process exited with code ${code}`);
-         if (mainWindow) {
-             mainWindow.webContents.send('python-status', { status: 'exited', code: code });
-         }
-        trackerProcess = null;
-    });
-
-     trackerProcess.on('error', (err) => {
-         console.error('Failed to start or communicate with Python process:', err);
-          if (mainWindow) {
-             mainWindow.webContents.send('python-status', { status: 'error', message: err.message });
-          }
-         trackerProcess = null;
-     });
-    */
 }
 
 function sendTrackerCommand(command) {
     if (trackerProcess) {
-        // console.log(`Sending command to Python: ${command}`);
         trackerProcess.stdin.write(`${command}\n`);
     } else {
         console.warn(`Python process not running. Cannot send command: ${command}`);
@@ -127,5 +111,15 @@ function sendTrackerCommand(command) {
 
 ipcMain.on('tracker-command', (event, command) => {
     sendTrackerCommand(command);
+});
+
+
+ipcMain.handle('get-tracker-state', () => {
+  return trackerState;
+});
+
+ipcMain.handle('update-tracker-state', (event, newState) => {
+  trackerState = { ...trackerState, ...newState };
+  return trackerState;
 });
 

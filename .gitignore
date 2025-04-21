@@ -8,3 +8,4 @@ timeio_electron/package-lock.json
 timeio_api/.env
 /timeio_api/db.sqlite3
 timeio_app/package-lock.json
+/timeio_app/db.sqlite3

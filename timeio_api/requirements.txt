@@ -1,7 +1,0 @@
-django
-djangorestframework
-django-cors-headers
-pyobjc-framework-Cocoa
-pynput
-requests
-python-dotenv

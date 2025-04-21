@@ -1,11 +1,11 @@
 import React from "react";
-import { Clock, BarChart2, Download, Tag } from "lucide-react";
+import { Clock, Download, Tag, History } from "lucide-react";
 import "./Sidebar.css";
 
 export const Sidebar = ({ activePage, onPageChange }) => {
   const menuItems = [
     { id: "current-session", icon: Clock, label: "Current Session" },
-    { id: "pages", icon: BarChart2, label: "Analytics" },
+    { id: "session-history", icon: History, label: "Session History" },
     { id: "export", icon: Download, label: "Export" },
     { id: "tags", icon: Tag, label: "Tags" },
   ];
