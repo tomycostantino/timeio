@@ -9,3 +9,7 @@ timeio_api/.env
 /timeio_api/db.sqlite3
 timeio_app/package-lock.json
 /timeio_app/db.sqlite3
+/.webpack
+/node_modules
+package-lock.json
+db.sqlite3
