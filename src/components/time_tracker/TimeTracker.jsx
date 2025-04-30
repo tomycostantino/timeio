@@ -1,144 +1,179 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Pause, Square, AlertCircle } from "lucide-react";
-import "./TimeTracker.css";
+import './TimeTracker.css';
+import { AlertCircle, Pause, Play, Square } from "lucide-react";
 
 export const TimeTracker = () => {
-  const [isRunning, setIsRunning] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [appUsage, setAppUsage] = useState({});
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [description, setDescription] = useState("");
-  const [appUsage, setAppUsage] = useState(null);
-  const [processStatus, setProcessStatus] = useState(null);
+  const [sessionId, setSessionId] = useState(null);
+  const [processStatus, setProcessStatus] = useState('');
   const [error, setError] = useState(null);
-  const startTimeRef = useRef(null);
   const timerIntervalRef = useRef(null);
-  const stateInitializedRef = useRef(false);
+  const startTimeRef = useRef(null);
 
   useEffect(() => {
-    const loadState = async () => {
+    const mountComponent = async () => {
       try {
-        if (!stateInitializedRef.current) {
-          const savedState = await window.trackerStateManager.getState();
-
-          setIsRunning(savedState.isRunning);
-          setElapsedTime(savedState.elapsedTime);
-          setDescription(savedState.description);
-          setAppUsage(savedState.appUsage);
-          setProcessStatus(savedState.processStatus);
-          setError(savedState.error);
-
-          startTimeRef.current = savedState.startTime;
-          stateInitializedRef.current = true;
-
-          if (savedState.isRunning && savedState.startTime) {
-            startTimer(savedState.startTime, savedState.elapsedTime);
-          }
+        const activeSession = await window.database.executeQuery('get-active-session');
+        if (activeSession) {
+          startTimeRef.current = activeSession.start_time * 1000;
+          setSessionId(activeSession.id);
+          setElapsedTime(Math.floor((Date.now() - startTimeRef.current) / 1000));
+          setRunning(true);
         }
       } catch (err) {
-        console.error("Failed to load state from main process:", err);
+        console.error('Failed to load active session:', err);
+        setError('Failed to load active session data.');
       }
     };
 
-    loadState();
-  }, []);
-
-  useEffect(() => {
-    if (stateInitializedRef.current) {
-      window.trackerStateManager.updateState({
-        isRunning,
-        elapsedTime,
-        description,
-        appUsage,
-        processStatus,
-        error,
-        startTime: startTimeRef.current
-      });
-    }
-  }, [isRunning, elapsedTime, description, appUsage, processStatus, error]);
-
-  useEffect(() => {
-    if (isRunning) {
-      if (!timerIntervalRef.current) {
-        startTimer();
-      }
-    } else {
-      stopTimer();
-    }
+    mountComponent();
 
     return () => {
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
       }
     };
-  }, [isRunning]);
+  }, []);
 
   useEffect(() => {
-    const handleTrackerUsage = (data) => {
-      if (data && data.usage_data) {
-        setAppUsage(data.usage_data);
-        setError(null);
-      }
+    if (running) {
+      startTimer();
+
+      window.time_tracker.onTrackerUsageStatus(handleTrackerUsage);
+      window.time_tracker.onTrackerStatus(handleTrackerStatus);
+
+      const statusInterval = setInterval(() => {
+        if (running) {
+          sendTrackerCommand('status');
+        }
+      }, 1000);
+
+      return () => {
+        clearInterval(statusInterval);
+        window.time_tracker.removeAllListeners();
+      };
+    } else {
+      stopTimer();
     }
-
-    const handleTrackerStatus = (status) => {
-      setProcessStatus(status.status);
-      if (status.status === 'started' && !isRunning) {
-        setIsRunning(true);
-      } else if (status.status === 'stopped') {
-        setIsRunning(false);
-      } else if (status.status === 'error') {
-        setError(status.message || "An unknown Python error occurred.");
-        setAppUsage(null);
-      }
-    }
-
-    window.time_tracker.onTrackerUsageStatus(handleTrackerUsage);
-    window.time_tracker.onTrackerStatus(handleTrackerStatus);
-
-    const statusInterval = setInterval(() => {
-      if (isRunning) {
-        sendTrackerCommand('status');
-      }
-    }, 1000);
-
-    return () => {
-      window.time_tracker.removeAllListeners();
-      clearInterval(statusInterval);
-    }
-  }, [isRunning]);
+  }, [running]);
 
   const sendTrackerCommand = (command) => {
     if (window.time_tracker) {
-      window.time_tracker.sendTrackerCommand(command);
-    }
-  }
-
-  const startTimer = (existingStartTime = null, existingElapsed = null) => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-    }
-
-    if (existingStartTime) {
-      startTimeRef.current = existingStartTime;
+      try {
+        window.time_tracker.sendTrackerCommand(command);
+      } catch (err) {
+        console.error(`Error sending tracker command "${command}":`, err);
+        setError(`Failed to send command to tracker: ${err.message}`);
+      }
     } else {
-      startTimeRef.current = Date.now() - (existingElapsed || elapsedTime) * 1000;
+      setError('Time tracker service not available');
     }
+  };
 
-    timerIntervalRef.current = setInterval(() => {
-      const now = Date.now();
-      const elapsed = Math.floor((now - startTimeRef.current) / 1000);
-      setElapsedTime(elapsed);
-    }, 500);
-  }
+  const handleTrackerUsage = (data) => {
+    if (data && data.usage_data) {
+      setAppUsage(data.usage_data);
+      setError(null);
+    }
+  };
 
-  const stopTimer = () => {
+  const handleTrackerStatus = (status) => {
+    setProcessStatus(status.status);
+    if (status.status === 'started' && !running) {
+      setRunning(true);
+    } else if (status.status === 'stopped') {
+      setRunning(false);
+    } else if (status.status === 'error') {
+      setError(status.message || "An unknown Python error occurred.");
+      setAppUsage(null);
+    }
+  };
+
+  const startTimer = async () => {
+    try {
+      if (!startTimeRef.current) {
+        const startTime = Date.now();
+        startTimeRef.current = startTime;
+
+        const session = await window.database.executeQuery('store-session', {
+          start_time: Math.floor(startTime / 1000),
+        });
+
+        setSessionId(session.id);
+      }
+
+      timerIntervalRef.current = setInterval(() => {
+        if (startTimeRef.current) {
+          setElapsedTime(Math.floor((Date.now() - startTimeRef.current) / 1000));
+        }
+      }, 1000);
+    } catch (err) {
+      console.error('Failed to start timer:', err);
+      setError('Failed to start timer: ' + err.message);
+    }
+  };
+
+  const stopTimer = async () => {
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
-  }
+    // await storeSession();
+  };
 
-  const formatTime = (seconds) => {
+  const storeSession = async () => {
+    if (!startTimeRef.current || !sessionId || elapsedTime <= 0) return;
+
+    try {
+      const sessionData = {
+        end_time: Math.floor(Date.now() / 1000),
+        duration: Object.values(appUsage).reduce((acc, rec) => {
+          acc += rec;
+          return acc;
+        }, 0),
+        app_usage: appUsage ? JSON.stringify(appUsage) : null
+      };
+
+      await window.database.executeQuery('update-session', {
+        id: sessionId,
+        ...sessionData
+      });
+    } catch (err) {
+      console.error('Failed to save session to database:', err);
+      setError('Failed to save session data to database.');
+    }
+  };
+
+  const handleStartStop = async () => {
+    if (!running) {
+      sendTrackerCommand('start');
+      setRunning(true);
+    } else {
+      sendTrackerCommand('stop');
+      setRunning(false);
+    }
+  };
+
+  const handleReset = async () => {
+    sendTrackerCommand('reset');
+
+    if (sessionId && startTimeRef.current) {
+      await storeSession();
+    }
+
+    stopTimer();
+    setRunning(false);
+    setElapsedTime(0);
+    setAppUsage({});
+    setProcessStatus('');
+    setError(null);
+    startTimeRef.current = null;
+    setSessionId(null);
+  };
+
+  const formatElapsedTime = (seconds) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
@@ -150,109 +185,76 @@ export const TimeTracker = () => {
     ].join(":");
   };
 
-  const saveSessionToDatabase = async () => {
-    if (!startTimeRef.current || elapsedTime <= 0) return;
+  const formatApplicationTime = (seconds) => {
+    if (seconds === 0) return "0 seconds";
 
-    try {
-      const sessionData = {
-        start_time: Math.floor(startTimeRef.current / 1000),
-        end_time: Math.floor(Date.now() / 1000),
-        duration: elapsedTime,
-        app_usage: appUsage ? JSON.stringify(appUsage) : null
-      };
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
 
-      const result = await window.database.ipcRenderer.invoke('store-session', sessionData);
-      console.log('Session saved to database with ID:', result.id);
-    } catch (err) {
-      console.error('Failed to save session to database:', err);
-      setError('Failed to save session data to database.');
+    const parts = [];
+    if (hours > 0) {
+      parts.push(`${hours} hour${hours > 1 ? 's' : ''}`);
     }
-  };
-
-  const handleStartStop = async () => {
-    if (!isRunning) {
-      sendTrackerCommand('start');
-      setIsRunning(true);
-      setError(null);
-    } else {
-      sendTrackerCommand('stop');
-      setIsRunning(false);
+    if (minutes > 0) {
+      parts.push(`${minutes} minute${minutes > 1 ? 's' : ''}`);
     }
-  };
+    if (secs > 0 || (hours === 0 && minutes === 0)) {
+      parts.push(`${secs} second${secs > 1 ? 's' : ''}`);
+    }
 
-  const handleReset = () => {
-    sendTrackerCommand('reset');
-    stopTimer();
-    saveSessionToDatabase();
-    setIsRunning(false);
-    setElapsedTime(0);
-    setDescription("");
-    setAppUsage(null);
-    setProcessStatus(null);
-    setError(null);
-
-    startTimeRef.current = null;
+    return parts.join(" ");
   };
 
   const sortedAppUsage = appUsage
-    ? Object.entries(appUsage)
-        .sort((a, b) => b[1] - a[1])
-    : [];
+      ? Object.entries(appUsage)
+          .sort((a, b) => b[1] - a[1])
+      : [];
 
   return (
-    <div className="time-tracker">
-      <div className="timer-display">{formatTime(elapsedTime)}</div>
+      <div className="time-tracker">
+        <div className="timer-display">{formatElapsedTime(elapsedTime)}</div>
 
-      {error && (
-        <div className="error-message">
-          <AlertCircle className="error-icon" />
-          {error}
+        {error && (
+            <div className="error-message">
+              <AlertCircle className="error-icon" />
+              {error}
+            </div>
+        )}
+
+        <div className="timer-controls">
+          <button
+              className={`control-button ${running ? "stop" : "start"}`}
+              onClick={handleStartStop}
+              disabled={processStatus === "error"}
+          >
+            {running ? <Pause /> : <Play />}
+            {running ? "Pause" : "Start"}
+          </button>
+
+          <button
+              className="control-button reset"
+              onClick={handleReset}
+              disabled={elapsedTime === 0 && !running}
+          >
+            <Square />
+            Reset
+          </button>
         </div>
-      )}
 
-      <div className="timer-controls">
-        <button
-          className={`control-button ${isRunning ? "stop" : "start"}`}
-          onClick={handleStartStop}
-          disabled={processStatus === "error"}
-        >
-          {isRunning ? <Pause /> : <Play />}
-          {isRunning ? "Pause" : "Start"}
-        </button>
-
-        <button className="control-button reset" onClick={handleReset} disabled={elapsedTime === 0 && !isRunning}>
-          <Square />
-          Reset
-        </button>
-      </div>
-
-      {/*
-        <div className="timer-description">
-          <label htmlFor="description">What are you working on?</label>
-          <input
-            type="text"
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Enter task description"
-            disabled={!isRunning && elapsedTime === 0}
-          />
-        </div>
-       */}
-
-      {appUsage && Object.keys(appUsage).length > 0 && (
-        <div className="app-usage">
-          <h3>Application Usage</h3>
-          <div className="app-usage-list">
-            {sortedAppUsage.map(([app, time]) => (
-              <div key={app} className="app-usage-item">
-                <span className="app-name">{app}</span>
-                <span className="app-time">{time} seconds</span>
+        {appUsage && Object.keys(appUsage).length > 0 && (
+            <div className="app-usage">
+              <h3>Application Usage</h3>
+              <div className="app-usage-list">
+                {sortedAppUsage.map(([app, time]) => (
+                    <div key={app} className="app-usage-item">
+                      <span className="app-name">{app}</span>
+                      <span className="app-time">{formatApplicationTime(time)}</span>
+                    </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+            </div>
+        )}
+      </div>
   );
 };

@@ -17,17 +17,15 @@ contextBridge.exposeInMainWorld('time_tracker', {
     }
 });
 
-contextBridge.exposeInMainWorld('trackerStateManager', {
-  getState: () => ipcRenderer.invoke('get-tracker-state'),
-  updateState: (newState) => ipcRenderer.invoke('update-tracker-state', newState)
-});
-
-contextBridge.exposeInMainWorld(
-    'database',
-    {
+contextBridge.exposeInMainWorld('database', {
+        executeQuery: (query, data) => {
+            const validQueries = ['store-session', 'update-session', 'get-sessions', 'get-active-session', 'delete-session'];
+            if (!validQueries.includes(query)) return Promise.reject(new Error('Query not allowed'));
+            return ipcRenderer.invoke(query, data);
+        },
         ipcRenderer: {
             invoke: (channel, data) => {
-                const validChannels = ['store-session', 'get-sessions', 'delete-session'];
+                const validChannels = ['store-session', 'get-sessions', 'get-active-session', 'delete-session'];
                 if (validChannels.includes(channel)) {
                     return ipcRenderer.invoke(channel, data);
                 }

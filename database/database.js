@@ -50,10 +50,10 @@ function setupDatabaseHandlers() {
     ipcMain.handle('store-session', (event, entry) => {
         return new Promise((resolve, reject) => {
             const db = getDatabase();
+            const keys = Object.keys(entry).join(', ');
+            const values = Object.values(entry).join(', ');
             db.run(
-                `INSERT INTO sessions (start_time, end_time, duration, app_usage) 
-                 VALUES (?, ?, ?, ?)`,
-                [entry.start_time, entry.end_time, entry.duration, entry.app_usage],
+                `INSERT INTO sessions (${keys}) VALUES (${values})`,
                 function(err) {
                     if (err) {
                         console.error('Error adding time entry:', err);
@@ -63,6 +63,38 @@ function setupDatabaseHandlers() {
                     }
                 }
             );
+        });
+    });
+
+    ipcMain.handle('update-session', (event, entry) => {
+        return new Promise((resolve, reject) => {
+            const db = getDatabase();
+            const id = entry.id;
+            if (!id) {
+                return reject(new Error('ID missing from entry data.'));
+            }
+            delete entry.id;
+            const fields = Object.keys(entry);
+            const values = Object.values(entry);
+
+            if (!fields.length) {
+                return resolve({ success: true, message: 'No fields to update' });
+            }
+
+            const setPlaceholders = fields.map(field => `${field} = ?`).join(', ');
+
+            const sql = `UPDATE sessions SET ${setPlaceholders} WHERE id = ?`;
+
+            const params = [...values, id];
+
+            db.run(sql, params, function(err) {
+                if (err) {
+                    console.error('Error storing session', err);
+                    reject(err);
+                } else {
+                    resolve({ success: true });
+                }
+            });
         });
     });
 
@@ -78,6 +110,20 @@ function setupDatabaseHandlers() {
                 }
             });
         });
+    });
+
+    ipcMain.handle('get-active-session', () => {
+        return new Promise((resolve, reject) => {
+            const db = getDatabase();
+            db.get('SELECT * FROM sessions WHERE end_time IS NULL ORDER BY start_time DESC LIMIT 1', [], (err, row) => {
+               if (err) {
+                   console.error('Error fetching active session', err);
+                   reject(err);
+               } else {
+                   resolve(row);
+               }
+            });
+        })
     });
 
     ipcMain.handle('delete-session', (event, id) => {

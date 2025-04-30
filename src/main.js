@@ -5,15 +5,6 @@ const { initDatabase, closeDatabase } = require('../database/database.js');
 
 let mainWindow;
 let trackerProcess = null;
-let trackerState = {
-  isRunning: false,
-  elapsedTime: 0,
-  description: "",
-  appUsage: null,
-  processStatus: null,
-  error: null,
-  startTime: null
-};
 
 if (require('electron-squirrel-startup')) {
   app.quit();
@@ -98,28 +89,13 @@ function startTracker() {
     });
 }
 
-function sendTrackerCommand(command) {
+ipcMain.on('tracker-command', (event, command) => {
     if (trackerProcess) {
         trackerProcess.stdin.write(`${command}\n`);
     } else {
         console.warn(`Python process not running. Cannot send command: ${command}`);
-         if (mainWindow) {
-             mainWindow.webContents.send('python-status', { status: 'command-failed', command: command, reason: 'Process not running' });
-         }
+        if (mainWindow) {
+            mainWindow.webContents.send('python-status', { status: 'command-failed', command: command, reason: 'Process not running' });
+        }
     }
-}
-
-ipcMain.on('tracker-command', (event, command) => {
-    sendTrackerCommand(command);
 });
-
-
-ipcMain.handle('get-tracker-state', () => {
-  return trackerState;
-});
-
-ipcMain.handle('update-tracker-state', (event, newState) => {
-  trackerState = { ...trackerState, ...newState };
-  return trackerState;
-});
-
