@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react"
-import { ChevronDown, ChevronUp, Clock, Calendar, RefreshCw, Laptop, AlertCircle, Trash } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, Calendar, RefreshCw, Laptop, AlertCircle, Trash, Download, Check } from 'lucide-react'
+import { formatApplicationTime } from "../../utils"
+import { ConfirmationModal } from "../common/ConfirmationModal.jsx"
 import "./SessionHistory.css"
 
 export const SessionHistory = () => {
@@ -8,6 +10,8 @@ export const SessionHistory = () => {
   const [error, setError] = useState(null);
   const [expandedSessionId, setExpandedSessionId] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState(null);
 
   useEffect(() => {
     fetchSessions();
@@ -90,6 +94,24 @@ export const SessionHistory = () => {
     return `hsl(${hue}, 70%, 60%)`;
   }
 
+  const handleDeleteClick = (sessionId) => {
+    setSessionToDelete(sessionId);
+    setDeleteModalOpen(true);
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (sessionToDelete) {
+      await deleteSession(sessionToDelete);
+      setDeleteModalOpen(false);
+      setSessionToDelete(null);
+    }
+  }
+
+  const handleDeleteCancel = () => {
+    setDeleteModalOpen(false);
+    setSessionToDelete(null);
+  }
+
   if (loading && sessions.length === 0) {
     return (
       <div className="session-history-container">
@@ -166,7 +188,7 @@ export const SessionHistory = () => {
                       {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                     </button>
 
-                    <button className="delete-button" onClick={() => deleteSession(session.id)}>
+                    <button className="delete-button" onClick={() => handleDeleteClick(session.id)}>
                       <Trash size={20} />
                     </button>
                   </div>
@@ -230,7 +252,7 @@ export const SessionHistory = () => {
                                   <span className="app-name">{app}</span>
                                 </div>
                                 <div className="app-usage-time">
-                                  <span className="app-time">{time} seconds</span>
+                                  <span className="app-time">{formatApplicationTime(time)}</span>
                                   <span className="app-percentage">({percentage.toFixed(1)}%)</span>
                                 </div>
                               </div>
@@ -246,6 +268,13 @@ export const SessionHistory = () => {
           })}
         </div>
       )}
+      <ConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Session"
+        message="Are you sure you want to delete this session? This action cannot be undone."
+      />
     </div>
   )
 }
