@@ -6,7 +6,6 @@ export const Sidebar = ({ activePage, onPageChange }) => {
   const menuItems = [
     { id: "current-session", icon: Clock, label: "Current Session" },
     { id: "session-history", icon: History, label: "Session History" },
-    { id: "export", icon: Download, label: "Export" },
     { id: "tags", icon: Tag, label: "Tags" },
   ];
 

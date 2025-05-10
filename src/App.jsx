@@ -1,11 +1,11 @@
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Sidebar } from "./components/sidebar/Sidebar.jsx";
-import { Export } from "./pages/Export.jsx";
 import { Tags } from "./pages/Tags.jsx";
 import { SessionHistory } from "./components/session_history/SessionHistory.jsx";
 import './App.css';
 import { TimeTracker } from "./components/time_tracker/TimeTracker.jsx";
+import { SessionSummaryProvider } from "./contexts/SessionSummaryContext.jsx";
 
 const container = document.getElementById('root');
 
@@ -19,9 +19,11 @@ const App = () => {
       case "current-session":
         return <TimeTracker />;
       case "session-history":
-        return <SessionHistory />;
-      case "export":
-        return <Export />;
+        return (
+            <SessionSummaryProvider>
+              <SessionHistory />
+            </SessionSummaryProvider>
+        );
       case "tags":
         return <Tags />;
       default:

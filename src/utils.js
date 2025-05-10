@@ -31,7 +31,13 @@ const formatApplicationTime = (seconds) => {
     return parts.join(" ");
 };
 
+const formatDate = (seconds) => {
+    const date = new Date(seconds * 1000);
+    return date.toLocaleString();
+}
+
 module.exports = {
     formatElapsedTime,
     formatApplicationTime,
+    formatDate,
 }
