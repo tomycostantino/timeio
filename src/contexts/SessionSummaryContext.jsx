@@ -10,6 +10,7 @@ export const SessionSummaryProvider = ({ children }) => {
     const [refreshing, setRefreshing] = useState(false);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [sessionToDelete, setSessionToDelete] = useState(null);
+    const [selectedSessions, setSelectedSessions] = useState([]);
 
     useEffect(() => {
         fetchSessions();
@@ -80,6 +81,18 @@ export const SessionSummaryProvider = ({ children }) => {
         setSessionToDelete(null);
     }
 
+    const handleToggleSelectSession = (sessionId) => {
+        const sessionExists = selectedSessions.find((s) => s.id === sessionId);
+        if (sessionExists) {
+            setSelectedSessions(selectedSessions.filter((s) => s.id !== sessionId));
+        } else {
+            const sessionToAdd = sessions.find((s) => s.id === sessionId);
+            if (sessionToAdd) {
+                setSelectedSessions([...selectedSessions, sessionToAdd]);
+            }
+        }
+    }
+
     return (
         <SessionSummaryContext.Provider
             value={{
@@ -89,12 +102,14 @@ export const SessionSummaryProvider = ({ children }) => {
                 expandedSessionId,
                 refreshing,
                 deleteModalOpen,
+                selectedSessions,
                 toggleSession,
                 handleRefresh,
                 handleDeleteClick,
                 deleteSession,
                 handleDeleteCancel,
                 handleDeleteConfirm,
+                handleToggleSelectSession,
             }}
         >
             {children}

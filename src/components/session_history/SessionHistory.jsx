@@ -1,12 +1,13 @@
 import React, { useContext } from "react"
-import { Clock, RefreshCw, AlertCircle } from 'lucide-react'
+import { RefreshCw, AlertCircle } from 'lucide-react'
 import { ConfirmationModal } from "../common/ConfirmationModal.jsx"
-import { SessionSummary } from "./SessionSummary.jsx";
+import { SessionGroups } from "./SessionGroups.jsx";
 import { SessionSummaryContext } from "../../contexts/SessionSummaryContext.jsx";
 import "./SessionHistory.css"
 
 export const SessionHistory = () => {
   const {
+    selectedSessions,
     sessions,
     loading,
     error,
@@ -43,28 +44,30 @@ export const SessionHistory = () => {
     <div className="session-history-container">
       <div className="session-history-header">
         <h2 className="session-history-title">Session History</h2>
-        <button
-          className={`refresh-button ${refreshing ? 'refreshing' : ''}`}
-          onClick={handleRefresh}
-          disabled={loading || refreshing}
-        >
-          <RefreshCw size={16} />
-          <span>Refresh</span>
-        </button>
+        <div className="session-history-actions">
+          {selectedSessions.length > 0 && (
+            <>
+              <button className="action-button export-button">
+                <span>Export Selected</span>
+              </button>
+              <button className="action-button delete-selected-button">
+                <span>Delete Selected</span>
+              </button>
+            </>
+          )}
+          <button
+            className={`refresh-button ${refreshing ? 'refreshing' : ''}`}
+            onClick={handleRefresh}
+            disabled={loading || refreshing}
+          >
+            <RefreshCw size={16} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
-      {sessions.length === 0 ? (
-        <div className="session-history-empty">
-          <Clock size={24} />
-          <p>No session history available.</p>
-        </div>
-      ) : (
-        <div className="session-list">
-          {sessions.map((session) => (
-              <SessionSummary session={session} />
-          ))}
-        </div>
-      )}
+      <SessionGroups />
+
       <ConfirmationModal
         isOpen={deleteModalOpen}
         onClose={handleDeleteCancel}

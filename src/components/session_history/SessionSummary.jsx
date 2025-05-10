@@ -6,11 +6,14 @@ import './SessionSummary.css';
 
 export const SessionSummary = ({ session }) => {
     const {
+        selectedSessions,
         expandedSessionId,
         toggleSession,
         handleDeleteClick,
+        handleToggleSelectSession,
     } = useContext(SessionSummaryContext);
     const [isExpanded, setIsExpanded] = useState(false);
+    const [isSelected, setIsSelected] = useState(false);
     const [appUsage, setAppUsage] = useState({});
 
     useEffect(() => {
@@ -24,6 +27,15 @@ export const SessionSummary = ({ session }) => {
             setIsExpanded(false);
         }
     }, [expandedSessionId, isExpanded]);
+
+    useEffect(() => {
+        const sessionExists = selectedSessions.find((s) => s.id === session.id);
+        if (sessionExists && !isSelected) {
+            setIsSelected(true);
+        } else if (!sessionExists && isSelected) {
+            setIsSelected(false);
+        }
+    }, [selectedSessions]);
 
     const parseAppUsage = (usageString) => {
         if (!usageString) return {};
@@ -57,9 +69,23 @@ export const SessionSummary = ({ session }) => {
         >
             <div
                 className="session-header"
-                onClick={() => toggleSession(session.id)}
+                onClick={(e) => {
+                    if (e.target.closest('.delete-button') || e.target.closest('.session-checkbox')) {
+                        return;
+                    }
+                    toggleSession(session.id);
+                }}
             >
                 <div className="session-info">
+                    <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                            e.stopPropagation();
+                            handleToggleSelectSession(session.id);
+                        }}
+                        className="session-checkbox"
+                    />
                     <div className="session-date">
                         <Calendar size={16} />
                         <span>{formatDate(session.start_time)}</span>
@@ -73,10 +99,14 @@ export const SessionSummary = ({ session }) => {
                     <button className="expand-button" aria-label={isExpanded ? "Collapse" : "Expand"}>
                         {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                     </button>
-
-                    <button className="delete-button" onClick={() => handleDeleteClick(session.id)}>
-                        <Trash size={20} />
-                    </button>
+                    {!selectedSessions.length && (
+                        <button className="delete-button" onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteClick(session.id);
+                        }}>
+                            <Trash size={20} />
+                        </button>
+                    )}
                 </div>
             </div>
 

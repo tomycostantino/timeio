@@ -110,3 +110,37 @@
     transform: rotate(360deg);
   }
 }
+
+.session-history-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.action-button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.export-button {
+  background-color: #2e7d32;
+  color: #ffffff;
+}
+
+.export-button:hover {
+  background-color: #1b5e20;
+}
+
+.delete-selected-button {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+.delete-selected-button:hover {
+  background-color: #b91c1c;
+}

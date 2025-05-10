@@ -228,3 +228,10 @@
         justify-content: space-between;
     }
 }
+
+.session-checkbox {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #3b82f6;
+}
